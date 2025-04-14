@@ -1,0 +1,23 @@
+##############################
+# Variables you need to change
+##############################
+
+sample: "Bonassai005"  #Name of the sample to act as base name
+reads: "/proj/snic2020-2-10/private/Data/Non-Human/Animals/HIFI_internal/DataDelivery_2024-11-11_09-43-12_ugc00352/files/pr_130/hifidata/pr_130_001/m84045_241015_151749_s1.bc2141--bc2141.bam"  #List of BAM files output from sequencer (include full path). If multiple files, separate by SPACES
+assembly_guide: "/crex/proj/snic2020-2-10/private/Data/Non-Human/Animals/sheep/ref_seqs/ARS-UI_Ramb_v3.0/GCF_016772045.2_ARS-UI_Ramb_v3.0_genomic.fna.gz"
+
+#Hifiasm options
+use_hiC: "false"  #Indicate whether using HiC data to aid in with assembly (note, NOT the same as HiC scaffolding!)
+hiC_read1: " "  #If using HiC, include path to first set of reads in pair
+hiC_read2: " "  ##If using HiC, include path to second set of reads in pair
+
+#Optional (ultra-long) Nanopore integration
+use_ont: "false" #Indicate whether have nanopore data
+ont_reads: " " #If using Nanopore, add path to COMBINED reads as a fastq file (opt. gzipped fastq)
+
+#Variables you DON'T need to change:
+#Output naming:
+hifi_outdir: "results/hifiasm_output_RAW"
+assem_outdir: "results/assembly"
+hifiqc_outdir: "results/hifiasm_output_RAW"
+assemqc_outdir: "results/assembly/qc"

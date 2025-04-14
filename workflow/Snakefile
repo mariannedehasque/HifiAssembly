@@ -1,0 +1,226 @@
+import yaml
+import glob, os, pathlib
+
+
+#Config file
+configfile: "../config/config.yaml"
+res_config = yaml.load(open("../config/resources.yaml"),Loader=yaml.FullLoader)
+
+#Gets info from config file:
+samples = config["sample"]
+haplotypes=["p_ctg", "hap1.p_ctg", "hap2.p_ctg"]
+reference = config["assembly_guide"]
+hifi_outdir = config["hifi_outdir"]
+assem_outdir = config["assem_outdir"]
+hifiqc_outdir = config["hifiqc_outdir"]
+assemqc_outdir = config["assemqc_outdir"]
+
+
+rule all:
+    input:
+        expand("results/assembly/qc/{sample}.cetartiodactyla_odb10/short_summary.specific.cetartiodactyla_odb10.{sample}.ragtag.busco.cetartiodactyla_odb10.txt", sample=samples),
+        expand(hifiqc_outdir + "/{sample}.histo", sample=samples),
+        expand(hifiqc_outdir + "/{sample}_genomescope/summary.txt", sample=samples),
+        expand("results/assembly/qc/{sample}.{haplo}.quast/report.txt", sample=samples, haplo=haplotypes),
+        expand("results/assembly/qc/{sample}.ragtag.quast/report.txt", sample=samples)
+
+
+rule bam2fastq:
+    input:
+        files = config["reads"].split(" ")
+    output:
+        "{sample}_combined_reads.fastq.gz"
+    params:
+        prefix = "{sample}_combined_reads"
+    conda:
+        "envs/pbtk.yaml"
+    shell:
+        """
+        bam2fastq -o {params.prefix} {input}
+        """
+
+rule adapterfilt:
+    input:
+        "{sample}_combined_reads.fastq.gz"
+    output:
+        temp(hifi_outdir + "/{sample}.filt.fastq.gz")
+    threads:
+        res_config["adapterfilt"]["cpus-per-task"]
+    conda:
+        "envs/adapter.yaml"
+    shell:
+        "cutadapt --discard-trimmed -j {threads} --overlap=35 -b ATCTCTCTCAACAACAACAACGGAGGAGGAGGAAAAGAGAGAGAT -b ATCTCTCTCTTTTCCTCCTCCTCCGTTGTTGTTGTTGAGAGAGAT -o {output} {input}"
+
+rule kmercount:
+    input:
+        hifi_outdir + "/{sample}.filt.fastq.gz"
+    output:
+        fasta = temp(hifi_outdir + "/{sample}.filt.fastq"),
+        counts = temp(hifiqc_outdir + "/{sample}.jf"),
+        histo = hifiqc_outdir + "/{sample}.histo"
+    threads:
+        res_config["kmercount"]["cpus-per-task"]
+    shell:
+        """
+        module load bioinfo-tools jellyfish/2.3.0
+
+        gunzip -c {input} > {output.fasta}
+        jellyfish count -C -m 21 -s 1G -t {threads} {output.fasta} -o {output.counts} 
+        jellyfish histo {output.counts}  > {output.histo}
+        """
+
+rule genomescope:
+    input:
+        hifiqc_outdir + "/{sample}.histo"
+    params:
+        outdir = hifiqc_outdir + "/{sample}_genomescope"
+    output: 
+        hifiqc_outdir + "/{sample}_genomescope/summary.txt",
+        hifiqc_outdir + "/{sample}_genomescope/linear_plot.png"   
+    shell:
+        """
+        module load bioinfo-tools genomescope2.0
+        genomescope.R -i {input} -o {params.outdir}
+        """
+
+rule hifiasm:
+    input:
+        hifi_outdir + "/{sample}.filt.fastq.gz"
+    output:
+        pasm = hifi_outdir + "/{sample}.p_ctg.gfa",
+        hap1asm = hifi_outdir + "/{sample}.hap1.p_ctg.gfa",
+        hap2asm = hifi_outdir + "/{sample}.hap2.p_ctg.gfa"
+    threads:
+        res_config["hifiasm"]["cpus-per-task"]
+    params:
+        hic = config["use_hiC"],
+        hic1 = config["hiC_read1"],
+        hic2 = config["hiC_read2"],
+        ont = config["use_ont"],
+        ontReads = config["ont_reads"],
+        outdir = hifi_outdir + "/{sample}"
+    log:
+        "logs/{sample}.hifiasm.out"
+    shell:
+        """
+        module load bioinfo-tools hifiasm/0.20.0-r639
+
+        if [[ "{params.hic}" == "true" && "{params.ont}" == "true" ]]; then
+            hifiasm -t {threads} --ul {params.ontReads} --h1 {params.hic1} --h2 {params.hic2} -o {params.outdir} {input} 2> {log}
+            mv {params.outdir}.hic.p_ctg.gfa {output.pasm}
+            mv {params.outdir}.hic.hap1.p_ctg.gfa {output.hap1asm}
+            mv {params.outdir}.hic.hap2.p_ctg.gfa {output.hap2asm}
+        elif [[ "{params.hic}" == "true" && "{params.ont}" == "false" ]]; then
+            hifiasm -t {threads} --h1 {params.hic1} --h2 {params.hic2} -o {params.outdir} {input} 2> {log}
+            mv {params.outdir}.hic.p_ctg.gfa {output.pasm}
+            mv {params.outdir}.hic.hap1.p_ctg.gfa {output.hap1asm}
+            mv {params.outdir}.hic.hap2.p_ctg.gfa {output.hap2asm}
+        elif [[ "{params.hic}" == "false" && "{params.ont}" == "true" ]]; then
+            hifiasm -t {threads} --ul {params.ontReads} -o {params.outdir} {input} 2> {log}
+            mv {params.outdir}.bp.p_ctg.gfa {output.pasm}
+            mv {params.outdir}.bp.hap1.p_ctg.gfa {output.hap1asm}
+            mv {params.outdir}.bp.hap2.p_ctg.gfa {output.hap2asm}
+        else
+            hifiasm -t {threads} -o {params.outdir} {input} 2> {log}
+            mv {params.outdir}.bp.p_ctg.gfa {output.pasm}
+            mv {params.outdir}.bp.hap1.p_ctg.gfa {output.hap1asm}
+            mv {params.outdir}.bp.hap2.p_ctg.gfa {output.hap2asm}
+        fi
+        """
+
+
+rule gfa_to_fasta:
+    input:
+        hifi_outdir + "/{sample}.{haplo}.gfa"
+    output:
+        temp(hifi_outdir + "/{sample}.{haplo}.fa")
+    shell:
+        "awk '/^S/{{print \">\"$2;print $3}}' {input} > {output}"
+
+rule rename_contig:
+    input:
+        hifi_outdir + "/{sample}.{haplo}.fa"
+    output:
+        assem_outdir + "/{sample}.{haplo}.fa"
+    shell:
+        "awk -v sample={wildcards.sample} -v haplo={wildcards.haplo} 'BEGIN{{FS=\">\"; OFS=\"#\"}} /^>/{{if (haplo ~ /hap/) print \">\"sample,haplo,$2; else print \">\"sample,\"pri\",$2}} !/^>/{{print;}}' {input} > {output}"
+
+rule quast_hifi:
+    input:
+        assem_outdir + "/{sample}.{haplo}.fa"
+    params:
+        prefix="results/assembly/qc/{sample}.{haplo}.quast"
+    output:
+        "results/assembly/qc/{sample}.{haplo}.quast/report.txt"
+    threads:
+        res_config["quast_hifi"]["cpus-per-task"]
+    log:
+        "logs/{sample}.{haplo}.quast_hifi.oudt"
+    shell:
+        """
+        module load bioinfo-tools quast/5.0.2
+        quast.py -t {threads} --eukaryote -o {params.prefix} {input} &> {log}
+        """
+
+rule ragtag:
+    input:
+        assem_outdir + "/{sample}.p_ctg.fa"
+    params:
+        outdir="results/assembly/ragtag_output",
+        reference=reference
+    output:
+        assem_outdir + "/{sample}.scaffold.fasta"
+    threads:
+        res_config["ragtag"]["cpus-per-task"]
+    log:
+        "logs/{sample}.ragtag.out"
+    shell:
+        """
+        source /home/marideha/miniconda3/bin/activate ragtag
+
+        ragtag.py scaffold {params.reference} {input} &> {log}
+        mv ragtag_output/ragtag.scaffold.fasta {output}
+        mv -r ragtag_output/ {params.outdir}
+        """
+
+rule quast_ragtag:
+    input:
+        assem_outdir + "/{sample}.scaffold.fasta"
+    params:
+        prefix="results/assembly/qc/{sample}.ragtag.quast"
+    output:
+        "results/assembly/qc/{sample}.ragtag.quast/report.txt"
+    threads:
+        res_config["quast_ragtag"]["cpus-per-task"]
+    log:
+        "logs/{sample}.quast_ragtag.out"
+    shell:
+        """
+        module load bioinfo-tools quast/5.0.2
+        quast.py -t {threads} --eukaryote -o {params.prefix} {input} &> {log}
+        """
+
+rule busco:
+    input:
+        assem_outdir + "/{sample}.scaffold.fasta"
+    output:
+        "results/assembly/qc/{sample}.cetartiodactyla_odb10/short_summary.specific.cetartiodactyla_odb10.{sample}.ragtag.busco.cetartiodactyla_odb10.txt"
+    params:
+        lineage="$BUSCO_LINEAGE_SETS/cetartiodactyla_odb10",
+        busco_out="results/assembly/qc/{sample}.cetartiodactyla_odb10"
+    threads:
+        res_config["busco"]["cpus-per-task"]
+    log:
+        "logs/{sample}.busco.out"
+    shell:
+        """
+        module load bioinfo-tools BUSCO/5.3.1
+
+        run_BUSCO.py \
+            -i {input} \
+            -l {params.lineage} \
+            -m genome \
+            -o {params.busco_out} \
+            -f \
+            -c {threads} &> {log}
+        """

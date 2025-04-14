@@ -1,0 +1,46 @@
+__default__:
+  account: naiss2024-22-1281 # fill in your compute account on your HPC system (if applicable)
+  partition: core
+  time: 02:00:00
+  ntasks: 1
+  cpus-per-task: 1
+
+bam2fastq:
+    time: 01-00:00:00
+    cpus-per-task: 2
+
+adapterfilt:
+    time: 01-00:00:00
+    cpus-per-task: 2
+
+kmercount:
+    time: 01-00:00:00
+    cpus-per-task: 8 
+
+hifiasm:
+    time: 05-00:00:00
+    cpus-per-task: 20
+
+gfatofasta:
+    time: 04:00:00
+    cpus-per-task: 1
+    
+renamecontigs:
+    time: 04:00:00
+    cpus-per-task: 1
+
+quast_hifi:
+    time: 04:00:00
+    cpus-per-task: 2
+
+ragtag:
+    time: 08:00:00
+    cpus-per-task: 4
+
+quast_ragtag:
+    time: 04:00:00
+    cpus-per-task: 2
+
+busco:
+    time: 2-00:00:00
+    cpus-per-task: 16
