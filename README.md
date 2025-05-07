@@ -1,5 +1,7 @@
 # PacBio_hifi_assembly
-This pipeline automates via snakemake the genome assembly of PacBio HiFi reads using Hifiasm and scaffolding using RagTag. This pipeline is a modified version from the harvardinformatics pipeline (https://github.com/harvardinformatics/pacbio_hifi_assembly.git) to run on the RACKHAM cluster on UPPMAX (https://www.uu.se/en/centre/uppmax.
+This pipeline automates via snakemake the genome assembly of PacBio HiFi reads using Hifiasm and scaffolding using RagTag. 
+
+The pipeline is a modified version from the harvardinformatics pipeline (https://github.com/harvardinformatics/pacbio_hifi_assembly.git) and was developed to run on the RACKHAM cluster on UPPMAX (https://www.uu.se/en/centre/uppmax). Modules and computational partitions may need to be modified for different cluster systems.
 
 ## Configuring the pipeline  
 In the repo directory, there is a file in the `config/` subdirectory called `config.yaml` that you will need to modify to point towards your data. For a basic assembly, just change the following lines: 
