@@ -34,7 +34,12 @@ To run tmux:
 Note: One does not simply exit tmux.
 
 ## Dry run
+
+```bash
 snakemake -npr -j 999 --use-conda --cluster-config ../config/resources.yaml --cluster "sbatch -A {cluster.account} -p {cluster.partition} -n {cluster.ntasks} -t {cluster.time}" &> dry_run.out
+```
 
 ## Main run
+```bash
 snakemake -j 999 --use-conda --cluster-config ../config/resources.yaml --cluster "sbatch -A {cluster.account} -p {cluster.partition} -n {cluster.ntasks} -t {cluster.time}" &> 241111_main.out
+```
